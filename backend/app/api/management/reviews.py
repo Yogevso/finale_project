@@ -718,6 +718,10 @@ async def get_pending_reviews(
             and_(
                 ReviewRequest.status == ReviewStatus.PENDING,
                 ReviewRequest.submitted_by != current_user.id,
+                # A review of a deleted document is not work anyone can do; it
+                # would otherwise sit in the queue for good, since deleting a
+                # document does not close its open reviews.
+                Document.deleted_at.is_(None),
             )
         )
         .order_by(ReviewRequest.submitted_at.desc())
@@ -776,7 +780,12 @@ async def get_my_submissions(
                 ReviewRequestReviewer.reviewer
             ),
         )
-        .filter(ReviewRequest.submitted_by == current_user.id)
+        .filter(
+            and_(
+                ReviewRequest.submitted_by == current_user.id,
+                Document.deleted_at.is_(None),
+            )
+        )
     )
     if current_user.role != UserRole.SYSTEM_ADMIN:
         query = query.filter(Document.tenant_id == current_user.tenant_id)

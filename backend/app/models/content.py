@@ -307,6 +307,10 @@ class Version(Base):
     semantic_version = Column(String(32), nullable=True, index=True)
     bump_type = Column(SQLEnum(VersionBumpType), default=VersionBumpType.PATCH, nullable=False)
     content = Column(Text, nullable=True)
+    # Table of contents for this version's content, as JSON. Held beside the
+    # HTML rather than derived from it, so entries keep the page numbers and
+    # stable heading ids the source document declared.
+    toc_json = Column(Text, nullable=True)
     changes_summary = Column(Text, nullable=True)
     is_published = Column(Boolean, default=False, nullable=False)
     published_at = Column(DateTime, nullable=True)
@@ -328,6 +332,11 @@ class Version(Base):
     @property
     def etag(self) -> str:
         return build_resource_etag("version", int(self.id), int(self.row_version or 1))
+
+    @property
+    def toc_items(self) -> str | None:
+        """Expose the stored contents under the name the response uses."""
+        return self.toc_json
 
 
 class Attachment(Base):

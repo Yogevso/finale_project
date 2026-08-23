@@ -55,6 +55,10 @@ IMAGE_CONTENT_TYPES = {
 }
 MAX_EMBEDDED_IMAGE_SIZE = 1_000_000
 COMPACT_HEADING_STYLE_RE = re.compile(r"^heading([1-6])$")
+# "toc 1" / "toc3": a line of the contents page Word generates. It is
+# navigation furniture, not content, and it is served separately as the
+# document's table of contents.
+COMPACT_TOC_STYLE_RE = re.compile(r"^toc([1-9])$")
 COMPACT_LIST_STYLE_RE = re.compile(r"^list(?:bullet|number)(\d+)?$")
 NON_ALNUM_RE = re.compile(r"[^a-z0-9]+")
 MONOSPACE_FONT_TOKENS = {
@@ -99,6 +103,9 @@ class ExtractionResult:
     confidence: float = 0.0
     extraction_error: str | None = None
     ir: IRNode | None = None
+    # Entries from the document's own contents page, when it generated one.
+    # They carry the real page numbers, which the headings alone never do.
+    declared_toc: list[dict[str, Any]] = field(default_factory=list)
 
 
 @dataclass(frozen=True, slots=True)
@@ -272,6 +279,10 @@ class DocxExtractor:
         document_title = str(parsed_document.metadata.get("title") or "") or (
             headings[0].text if headings else None
         )
+        # The contents page Word generated states the real page numbers; the
+        # extraction result alone cannot, so it is read from the same bytes here.
+        declared_toc = self._read_declared_toc(content)
+
         result = ExtractionResult(
             status="ready",
             html=html_content,
@@ -282,6 +293,7 @@ class DocxExtractor:
             confidence=1.0,
             extraction_error=None,
             ir=document_ir,
+            declared_toc=declared_toc,
         )
         result.warnings = self._verify(result)
         result.confidence = calculate_confidence(result)
@@ -318,6 +330,28 @@ class DocxExtractor:
 
     def _extract_paragraphs(self, parsed_document: ParsedDocxDocument) -> list[ParagraphBlock]:
         return parsed_document.paragraphs
+
+    def _is_generated_toc_paragraph(self, paragraph: ParagraphBlock) -> bool:
+        """True for a line of the contents page Word generated."""
+        for candidate in (paragraph.style_name, paragraph.style_id):
+            normalized = self._normalize_style_token(candidate)
+            if normalized and COMPACT_TOC_STYLE_RE.fullmatch(normalized):
+                return True
+        return False
+
+    def _read_declared_toc(self, data: bytes) -> list[dict[str, Any]]:
+        """Read the contents page Word generated, if the document has one."""
+        from app.conversion.document_toc import build_toc_from_docx_structure
+        from app.conversion.docx_structure import extract_docx_structure
+
+        try:
+            structure = extract_docx_structure(data)
+        except Exception:  # policy: DEGRADED — a missing contents page is not an error
+            logger.debug("Declared contents page unavailable", exc_info=True)
+            return []
+        if structure.error:
+            return []
+        return build_toc_from_docx_structure(structure)
 
     def _extract_headings(self, paragraphs: list[ParagraphBlock]) -> dict[int, HeadingItem]:
         return self._build_heading_items(paragraphs)
@@ -571,7 +605,12 @@ class DocxExtractor:
         parts: list[str] = []
         for node in run_element:
             tag_name = self._local_name(node.tag)
-            if tag_name in {"t", "instrText"}:
+            # w:instrText holds a field *instruction*, never text a reader should
+            # see. Emitting it puts the raw code into the document: a contents
+            # page renders as 'TOC \o "3-4" \h \z ... PAGEREF _Toc237367833 \h 10'
+            # instead of '1 Release Kit Summary 10'. The field's visible result is
+            # carried by the w:t runs that follow it, so nothing is lost.
+            if tag_name == "t":
                 parts.append(node.text or "")
             elif tag_name == "tab":
                 parts.append("\t")
@@ -670,6 +709,15 @@ class DocxExtractor:
         while index < len(blocks):
             block = blocks[index]
             if block.kind == "paragraph" and block.paragraph is not None:
+                # Every line of the generated contents page would otherwise become
+                # a body paragraph, and downstream each one becomes a phantom
+                # "section" anchored to a page number rather than to a heading. A
+                # review then reports all of them as deleted the moment the page
+                # is regenerated, burying the change the author actually made.
+                if self._is_generated_toc_paragraph(block.paragraph):
+                    index += 1
+                    continue
+
                 heading_item = heading_lookup.get(id(block.paragraph))
                 # Numbered headings ("1.1 Release Kit Summary") carry a numPr just like
                 # list items do. Without this guard the list branch claims them and the

@@ -1,6 +1,8 @@
 # Audit Remediation Plan
 
-> Based on `PROJECT_FULL_AUDIT_FINAL.md` — 148 deduplicated findings.
+> Based on the full project audit of 2025-03-23 — 148 deduplicated findings.
+> That audit and the execution plans that closed it were removed from the tree
+> once complete; read them with `git show 8d19e6c:PROJECT_FULL_AUDIT_FINAL.md`.
 > Format mirrors existing `PRD.md` wave structure.
 > Codebase-verified: 8 findings confirmed fixed, 1 accepted by-design, 5 partially fixed, rest open.
 

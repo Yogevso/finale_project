@@ -85,3 +85,31 @@ def test_no_text_is_lost():
 
     for paragraph in paragraphs:
         assert paragraph.text in html
+
+
+def test_the_generated_contents_page_is_not_emitted_as_body_paragraphs():
+    """Word's contents page is navigation, and it is served as the TOC instead.
+
+    Left in the body, each of its lines becomes a paragraph and then a phantom
+    "section" anchored to a page number rather than to a heading. A review then
+    reports every one of them as deleted the moment the page is regenerated,
+    burying the change the author actually made.
+    """
+    extractor = DocxExtractor()
+    contents = [
+        _paragraph("1\tRelease Kit Summary\t10", style="toc 1"),
+        _paragraph("1.1\tRelease Kit Details\t10", style="toc 2"),
+    ]
+    body = [
+        _numbered_heading("Release Kit Summary", "heading 1"),
+        _paragraph("Real body copy."),
+    ]
+    paragraphs = contents + body
+    blocks = [BodyBlock(kind="paragraph", paragraph=p) for p in paragraphs]
+
+    html = ir_to_html(extractor._build_ir(blocks, _heading_lookup(extractor, paragraphs)))
+
+    assert "Release Kit Details" not in html, "a contents line must not become content"
+    assert "PAGEREF" not in html
+    assert "<h1" in html and "Release Kit Summary" in html, "the heading itself must survive"
+    assert "Real body copy." in html

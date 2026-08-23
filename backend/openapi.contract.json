@@ -691,8 +691,8 @@
           "expires_in_days": {
             "anyOf": [
               {
-                "maximum": 365.0,
-                "minimum": 1.0,
+                "maximum": 365,
+                "minimum": 1,
                 "type": "integer"
               },
               {
@@ -729,7 +729,7 @@
         "type": "object"
       },
       "ApiKeyCreatedResponse": {
-        "description": "Returned only on creation \u2014 contains the full key (never shown again).",
+        "description": "Returned only on creation — contains the full key (never shown again).",
         "properties": {
           "created_at": {
             "format": "date-time",
@@ -1419,14 +1419,14 @@
             "type": "string"
           },
           "threshold": {
-            "maximum": 1000000.0,
-            "minimum": 1.0,
+            "maximum": 1000000,
+            "minimum": 1,
             "title": "Threshold",
             "type": "integer"
           },
           "window_minutes": {
-            "maximum": 10080.0,
-            "minimum": 1.0,
+            "maximum": 10080,
+            "minimum": 1,
             "title": "Window Minutes",
             "type": "integer"
           }
@@ -3161,6 +3161,17 @@
               }
             ],
             "title": "Parent Id"
+          },
+          "review_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Id"
           }
         },
         "required": [
@@ -3257,6 +3268,17 @@
             "default": 0,
             "title": "Reply Count",
             "type": "integer"
+          },
+          "review_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Id"
           },
           "updated_at": {
             "format": "date-time",
@@ -4037,8 +4059,8 @@
         "description": "Content production analytics response",
         "properties": {
           "approval_rate": {
-            "maximum": 100.0,
-            "minimum": 0.0,
+            "maximum": 100,
+            "minimum": 0,
             "title": "Approval Rate",
             "type": "number"
           },
@@ -5649,14 +5671,14 @@
         "description": "Engagement analytics response",
         "properties": {
           "avg_reading_progress": {
-            "maximum": 100.0,
-            "minimum": 0.0,
+            "maximum": 100,
+            "minimum": 0,
             "title": "Avg Reading Progress",
             "type": "number"
           },
           "completion_rate": {
-            "maximum": 100.0,
-            "minimum": 0.0,
+            "maximum": 100,
+            "minimum": 0,
             "title": "Completion Rate",
             "type": "number"
           },
@@ -5780,8 +5802,8 @@
           },
           "guardrail_threshold": {
             "default": 10,
-            "maximum": 100.0,
-            "minimum": 1.0,
+            "maximum": 100,
+            "minimum": 1,
             "title": "Guardrail Threshold",
             "type": "integer"
           },
@@ -5805,8 +5827,8 @@
           },
           "traffic_percentage": {
             "default": 100,
-            "maximum": 100.0,
-            "minimum": 1.0,
+            "maximum": 100,
+            "minimum": 1,
             "title": "Traffic Percentage",
             "type": "integer"
           },
@@ -5859,7 +5881,7 @@
           },
           "sample_size": {
             "default": 0,
-            "minimum": 0.0,
+            "minimum": 0,
             "title": "Sample Size",
             "type": "integer"
           },
@@ -6231,8 +6253,8 @@
           },
           "rollout_percentage": {
             "default": 100,
-            "maximum": 100.0,
-            "minimum": 0.0,
+            "maximum": 100,
+            "minimum": 0,
             "title": "Rollout Percentage",
             "type": "integer"
           },
@@ -6333,8 +6355,8 @@
             "$ref": "#/components/schemas/TimeGranularity"
           },
           "helpfulness_rate": {
-            "maximum": 100.0,
-            "minimum": 0.0,
+            "maximum": 100,
+            "minimum": 0,
             "title": "Helpfulness Rate",
             "type": "number"
           },
@@ -7624,8 +7646,8 @@
             "title": "Comment"
           },
           "score": {
-            "maximum": 10.0,
-            "minimum": 0.0,
+            "maximum": 10,
+            "minimum": 0,
             "title": "Score",
             "type": "integer"
           }
@@ -9409,7 +9431,7 @@
         "type": "object"
       },
       "PublicRegistrationRequest": {
-        "description": "AF-009: Public self-registration schema \u2014 no role or tenant_id fields.\n\nExternal API payloads must not carry server-owned authority fields.",
+        "description": "AF-009: Public self-registration schema — no role or tenant_id fields.\n\nExternal API payloads must not carry server-owned authority fields.",
         "properties": {
           "email": {
             "format": "email",
@@ -9526,7 +9548,7 @@
             "title": "Platform"
           },
           "score": {
-            "default": 0.0,
+            "default": 0,
             "title": "Score",
             "type": "number"
           },
@@ -9932,9 +9954,46 @@
               }
             ],
             "title": "Comments"
+          },
+          "review_feedback": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReviewFeedback"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "title": "ReviewAction",
+        "type": "object"
+      },
+      "ReviewFeedback": {
+        "description": "Structured review feedback payload.",
+        "properties": {
+          "general_comment": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "General Comment"
+          },
+          "section_comments": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ReviewSectionComment"
+            },
+            "title": "Section Comments",
+            "type": "array"
+          }
+        },
+        "title": "ReviewFeedback",
         "type": "object"
       },
       "ReviewListResponse": {
@@ -9974,6 +10033,171 @@
         "title": "ReviewListResponse",
         "type": "object"
       },
+      "ReviewOwnershipRuleCreate": {
+        "description": "Create ownership rule payload.",
+        "properties": {
+          "category": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category"
+          },
+          "company_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Company Id"
+          },
+          "is_active": {
+            "default": true,
+            "title": "Is Active",
+            "type": "boolean"
+          },
+          "platform": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Platform"
+          },
+          "priority": {
+            "default": 100,
+            "maximum": 1000,
+            "minimum": 0,
+            "title": "Priority",
+            "type": "integer"
+          },
+          "reviewer_id": {
+            "title": "Reviewer Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "reviewer_id"
+        ],
+        "title": "ReviewOwnershipRuleCreate",
+        "type": "object"
+      },
+      "ReviewOwnershipRuleResponse": {
+        "description": "Ownership rule response schema.",
+        "properties": {
+          "category": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category"
+          },
+          "company_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Company Id"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "created_by": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "is_active": {
+            "default": true,
+            "title": "Is Active",
+            "type": "boolean"
+          },
+          "platform": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Platform"
+          },
+          "priority": {
+            "default": 100,
+            "maximum": 1000,
+            "minimum": 0,
+            "title": "Priority",
+            "type": "integer"
+          },
+          "reviewer": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UserResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reviewer_id": {
+            "title": "Reviewer Id",
+            "type": "integer"
+          },
+          "tenant_id": {
+            "title": "Tenant Id",
+            "type": "integer"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reviewer_id",
+          "id",
+          "tenant_id",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "ReviewOwnershipRuleResponse",
+        "type": "object"
+      },
       "ReviewReject": {
         "description": "Reject a review (comments required)",
         "properties": {
@@ -9982,6 +10206,16 @@
             "minLength": 1,
             "title": "Comments",
             "type": "string"
+          },
+          "review_feedback": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReviewFeedback"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -10071,6 +10305,22 @@
             ],
             "title": "Message"
           },
+          "requested_reviewer_ids": {
+            "default": [],
+            "items": {
+              "type": "integer"
+            },
+            "title": "Requested Reviewer Ids",
+            "type": "array"
+          },
+          "requested_reviewers": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/UserResponse"
+            },
+            "title": "Requested Reviewers",
+            "type": "array"
+          },
           "review_comments": {
             "anyOf": [
               {
@@ -10081,6 +10331,16 @@
               }
             ],
             "title": "Review Comments"
+          },
+          "review_feedback": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReviewFeedback"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "reviewed_at": {
             "anyOf": [
@@ -10170,6 +10430,66 @@
           "created_at"
         ],
         "title": "ReviewResponse",
+        "type": "object"
+      },
+      "ReviewSectionComment": {
+        "description": "Structured section-level review feedback.",
+        "properties": {
+          "action_item_assignee": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Action Item Assignee"
+          },
+          "anchor_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Anchor Id"
+          },
+          "comment": {
+            "maxLength": 5000,
+            "minLength": 1,
+            "title": "Comment",
+            "type": "string"
+          },
+          "severity": {
+            "default": "medium",
+            "enum": [
+              "low",
+              "medium",
+              "high",
+              "blocker"
+            ],
+            "title": "Severity",
+            "type": "string"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          }
+        },
+        "required": [
+          "comment"
+        ],
+        "title": "ReviewSectionComment",
         "type": "object"
       },
       "ReviewSlaItem": {
@@ -10290,6 +10610,14 @@
               }
             ],
             "title": "Message"
+          },
+          "requested_reviewer_ids": {
+            "default": [],
+            "items": {
+              "type": "integer"
+            },
+            "title": "Requested Reviewer Ids",
+            "type": "array"
           },
           "version_id": {
             "anyOf": [
@@ -10611,7 +10939,7 @@
             "type": "integer"
           },
           "relevance_score": {
-            "default": 0.0,
+            "default": 0,
             "title": "Relevance Score",
             "type": "number"
           },
@@ -11744,8 +12072,8 @@
           },
           "auto_archive_after_value": {
             "default": 12,
-            "maximum": 1200.0,
-            "minimum": 1.0,
+            "maximum": 1200,
+            "minimum": 1,
             "title": "Auto Archive After Value",
             "type": "integer"
           },
@@ -11888,8 +12216,8 @@
           },
           "port": {
             "default": 587,
-            "maximum": 65535.0,
-            "minimum": 1.0,
+            "maximum": 65535,
+            "minimum": 1,
             "title": "Port",
             "type": "integer"
           },
@@ -12340,8 +12668,8 @@
             "type": "integer"
           },
           "health_score": {
-            "maximum": 100.0,
-            "minimum": 0.0,
+            "maximum": 100,
+            "minimum": 0,
             "title": "Health Score",
             "type": "number"
           },
@@ -13076,7 +13404,7 @@
         "type": "object"
       },
       "UserCreate": {
-        "description": "User creation schema (admin use \u2014 includes role and tenant_id).",
+        "description": "User creation schema (admin use — includes role and tenant_id).",
         "properties": {
           "email": {
             "format": "email",
@@ -13142,7 +13470,7 @@
           },
           "checklist_version": {
             "default": 1,
-            "minimum": 1.0,
+            "minimum": 1,
             "title": "Checklist Version",
             "type": "integer"
           },
@@ -13167,7 +13495,7 @@
           },
           "guide_version": {
             "default": 1,
-            "minimum": 1.0,
+            "minimum": 1,
             "title": "Guide Version",
             "type": "integer"
           }
@@ -13192,7 +13520,7 @@
           "checklist_version": {
             "anyOf": [
               {
-                "minimum": 1.0,
+                "minimum": 1,
                 "type": "integer"
               },
               {
@@ -13230,7 +13558,7 @@
           "guide_version": {
             "anyOf": [
               {
-                "minimum": 1.0,
+                "minimum": 1,
                 "type": "integer"
               },
               {
@@ -13729,7 +14057,6 @@
           "content": {
             "anyOf": [
               {
-                "maxLength": 500000,
                 "type": "string"
               },
               {
@@ -13808,7 +14135,6 @@
           "content": {
             "anyOf": [
               {
-                "maxLength": 500000,
                 "type": "string"
               },
               {
@@ -13911,6 +14237,13 @@
               }
             ],
             "title": "Semantic Version"
+          },
+          "toc_items": {
+            "items": {
+              "$ref": "#/components/schemas/AttachmentOutlineItem"
+            },
+            "title": "Toc Items",
+            "type": "array"
           },
           "version_number": {
             "title": "Version Number",
@@ -15813,7 +16146,7 @@
         ]
       },
       "put": {
-        "description": "Update branding for a tenant \u2014 stored in Tenant.settings JSON.",
+        "description": "Update branding for a tenant — stored in Tenant.settings JSON.",
         "operationId": "update_tenant_branding_api_v1_admin_tenants__tenant_id__branding_put",
         "parameters": [
           {
@@ -16025,7 +16358,7 @@
         ]
       },
       "post": {
-        "description": "Initiate domain verification \u2014 returns a DNS TXT record token.",
+        "description": "Initiate domain verification — returns a DNS TXT record token.",
         "operationId": "create_domain_verification_api_v1_admin_tenants__tenant_id__domains_post",
         "parameters": [
           {
@@ -16462,7 +16795,7 @@
     },
     "/api/v1/admin/tenants/{tenant_id}/suspend": {
       "post": {
-        "description": "Suspend a tenant \u2014 all their users get 403.",
+        "description": "Suspend a tenant — all their users get 403.",
         "operationId": "suspend_tenant_api_v1_admin_tenants__tenant_id__suspend_post",
         "parameters": [
           {
@@ -19125,7 +19458,7 @@
     },
     "/api/v1/auth/permissions-matrix": {
       "get": {
-        "description": "Return the role\u2192permissions matrix so the frontend can align UI guards.",
+        "description": "Return the role→permissions matrix so the frontend can align UI guards.",
         "operationId": "get_permissions_matrix_api_v1_auth_permissions_matrix_get",
         "responses": {
           "200": {
@@ -19463,7 +19796,7 @@
     },
     "/api/v1/changelog": {
       "get": {
-        "description": "List changelog entries (management \u2014 includes unpublished drafts).",
+        "description": "List changelog entries (management — includes unpublished drafts).",
         "operationId": "list_changelog_api_v1_changelog_get",
         "parameters": [
           {
@@ -23550,7 +23883,7 @@
             "schema": {
               "default": 0.8,
               "description": "Similarity threshold",
-              "maximum": 1.0,
+              "maximum": 1,
               "minimum": 0.5,
               "title": "Threshold",
               "type": "number"
@@ -24552,6 +24885,74 @@
         ]
       }
     },
+    "/api/v1/documents/{document_id}/attachments/{attachment_id}/fidelity-view": {
+      "get": {
+        "description": "Render a PDF attachment as page-faithful HTML.\n\nThis is a read-only companion to the Reader View. It is generated on\ndemand and never stored, so it takes no part in editing, review or\npublishing.",
+        "operationId": "get_attachment_fidelity_view_api_v1_documents__document_id__attachments__attachment_id__fidelity_view_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "document_id",
+            "required": true,
+            "schema": {
+              "title": "Document Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "attachment_id",
+            "required": true,
+            "schema": {
+              "title": "Attachment Id",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Signed download ticket (preferred) or legacy JWT token",
+            "in": "query",
+            "name": "token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Signed download ticket (preferred) or legacy JWT token",
+              "title": "Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Attachment Fidelity View",
+        "tags": [
+          "Attachments"
+        ]
+      }
+    },
     "/api/v1/documents/{document_id}/attachments/{attachment_id}/reader-view": {
       "get": {
         "description": "Get Reader View derived artifact for supported attachment types.",
@@ -24791,6 +25192,24 @@
               "minimum": 1,
               "title": "Page Size",
               "type": "integer"
+            }
+          },
+          {
+            "description": "Filter comments by review session",
+            "in": "query",
+            "name": "review_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter comments by review session",
+              "title": "Review Id"
             }
           }
         ],
@@ -25106,6 +25525,63 @@
         ]
       }
     },
+    "/api/v1/documents/{document_id}/comments/{comment_id}/reopen": {
+      "post": {
+        "description": "Re-open a resolved comment thread.\nOnly admins, managers and editors can re-open comments.",
+        "operationId": "reopen_comment_api_v1_documents__document_id__comments__comment_id__reopen_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "document_id",
+            "required": true,
+            "schema": {
+              "title": "Document Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "comment_id",
+            "required": true,
+            "schema": {
+              "title": "Comment Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommentResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Reopen Comment",
+        "tags": [
+          "Comments"
+        ]
+      }
+    },
     "/api/v1/documents/{document_id}/comments/{comment_id}/resolve": {
       "post": {
         "description": "Mark a comment thread as resolved.\nOnly admins and editors can resolve comments.",
@@ -25232,6 +25708,64 @@
           }
         ],
         "summary": "Assign Companies Batch",
+        "tags": [
+          "Documents"
+        ]
+      }
+    },
+    "/api/v1/documents/{document_id}/export": {
+      "get": {
+        "description": "Export the current document content as PDF, Word, or PowerPoint.\nConverts the latest version HTML into the requested format.",
+        "operationId": "export_document_api_v1_documents__document_id__export_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "document_id",
+            "required": true,
+            "schema": {
+              "title": "Document Id",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Export format",
+            "in": "query",
+            "name": "format",
+            "required": true,
+            "schema": {
+              "description": "Export format",
+              "pattern": "^(pdf|docx|pptx)$",
+              "title": "Format",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Export Document",
         "tags": [
           "Documents"
         ]
@@ -27372,6 +27906,22 @@
           },
           {
             "in": "query",
+            "name": "document_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Document Id"
+            }
+          },
+          {
+            "in": "query",
             "name": "search",
             "required": false,
             "schema": {
@@ -27616,7 +28166,7 @@
     },
     "/api/v1/gdpr/deletion": {
       "post": {
-        "description": "Request account data deletion (GDPR Article 17 \u2014 right to erasure).",
+        "description": "Request account data deletion (GDPR Article 17 — right to erasure).",
         "operationId": "create_deletion_request_api_v1_gdpr_deletion_post",
         "requestBody": {
           "content": {
@@ -27663,7 +28213,7 @@
     },
     "/api/v1/gdpr/deletion/{request_id}/execute": {
       "post": {
-        "description": "Execute an approved data deletion \u2014 anonymizes user data.",
+        "description": "Execute an approved data deletion — anonymizes user data.",
         "operationId": "run_deletion_api_v1_gdpr_deletion__request_id__execute_post",
         "parameters": [
           {
@@ -29450,6 +30000,225 @@
         ]
       }
     },
+    "/api/v1/portal/documents/{document_id}/comments": {
+      "get": {
+        "description": "List comments for a customer-visible portal document.",
+        "operationId": "list_customer_document_comments_api_v1_portal_documents__document_id__comments_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "document_id",
+            "required": true,
+            "schema": {
+              "title": "Document Id",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Page number",
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "description": "Page number",
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Comments per page",
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "description": "Comments per page",
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Filter comments by review session",
+            "in": "query",
+            "name": "review_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter comments by review session",
+              "title": "Review Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginatedComments"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "List Customer Document Comments",
+        "tags": [
+          "Customer Portal",
+          "Customer Portal"
+        ]
+      },
+      "post": {
+        "description": "Create a comment thread or reply on a customer-visible portal document.",
+        "operationId": "create_customer_document_comment_api_v1_portal_documents__document_id__comments_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "document_id",
+            "required": true,
+            "schema": {
+              "title": "Document Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CommentCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommentResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Create Customer Document Comment",
+        "tags": [
+          "Customer Portal",
+          "Customer Portal"
+        ]
+      }
+    },
+    "/api/v1/portal/documents/{document_id}/comments/{comment_id}": {
+      "patch": {
+        "description": "Update a comment on a customer-visible portal document.",
+        "operationId": "update_customer_document_comment_api_v1_portal_documents__document_id__comments__comment_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "document_id",
+            "required": true,
+            "schema": {
+              "title": "Document Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "comment_id",
+            "required": true,
+            "schema": {
+              "title": "Comment Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CommentUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommentResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Update Customer Document Comment",
+        "tags": [
+          "Customer Portal",
+          "Customer Portal"
+        ]
+      }
+    },
     "/api/v1/portal/documents/{document_id}/related": {
       "get": {
         "operationId": "get_related_documents_api_v1_portal_documents__document_id__related_get",
@@ -30329,7 +31098,7 @@
     },
     "/api/v1/portal/support/tickets/{ticket_id}": {
       "get": {
-        "description": "Get ticket detail with messages \u2014 internal notes excluded (X1-073).",
+        "description": "Get ticket detail with messages — internal notes excluded (X1-073).",
         "operationId": "get_my_ticket_api_v1_portal_support_tickets__ticket_id__get",
         "parameters": [
           {
@@ -31439,6 +32208,23 @@
         "parameters": [
           {
             "in": "query",
+            "name": "document_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Document Id"
+            }
+          },
+          {
+            "in": "query",
             "name": "status",
             "required": false,
             "schema": {
@@ -31511,11 +32297,203 @@
         ]
       }
     },
+    "/api/v1/reviews/ownership-rules": {
+      "get": {
+        "description": "List review ownership assignment rules.",
+        "operationId": "list_review_ownership_rules_api_v1_reviews_ownership_rules_get",
+        "parameters": [
+          {
+            "description": "Optional tenant scope for system admins",
+            "in": "query",
+            "name": "tenant_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional tenant scope for system admins",
+              "title": "Tenant Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ReviewOwnershipRuleResponse"
+                  },
+                  "title": "Response List Review Ownership Rules Api V1 Reviews Ownership Rules Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "List Review Ownership Rules",
+        "tags": [
+          "Reviews",
+          "Reviews"
+        ]
+      },
+      "post": {
+        "description": "Create a review ownership assignment rule.",
+        "operationId": "create_review_ownership_rule_api_v1_reviews_ownership_rules_post",
+        "parameters": [
+          {
+            "description": "Target tenant for system admins",
+            "in": "query",
+            "name": "tenant_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Target tenant for system admins",
+              "title": "Tenant Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReviewOwnershipRuleCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewOwnershipRuleResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Create Review Ownership Rule",
+        "tags": [
+          "Reviews",
+          "Reviews"
+        ]
+      }
+    },
+    "/api/v1/reviews/ownership-rules/{rule_id}": {
+      "delete": {
+        "description": "Delete an ownership assignment rule.",
+        "operationId": "delete_review_ownership_rule_api_v1_reviews_ownership_rules__rule_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "rule_id",
+            "required": true,
+            "schema": {
+              "title": "Rule Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Delete Review Ownership Rule",
+        "tags": [
+          "Reviews",
+          "Reviews"
+        ]
+      }
+    },
     "/api/v1/reviews/pending": {
       "get": {
         "description": "Get reviews pending current user's action (excludes own submissions)",
         "operationId": "get_pending_reviews_api_v1_reviews_pending_get",
         "parameters": [
+          {
+            "in": "query",
+            "name": "document_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Document Id"
+            }
+          },
           {
             "in": "query",
             "name": "page",
@@ -31568,6 +32546,68 @@
           }
         ],
         "summary": "Get Pending Reviews",
+        "tags": [
+          "Reviews",
+          "Reviews"
+        ]
+      }
+    },
+    "/api/v1/reviews/reviewer-candidates": {
+      "get": {
+        "description": "List users eligible to be requested reviewers.",
+        "operationId": "list_reviewer_candidates_api_v1_reviews_reviewer_candidates_get",
+        "parameters": [
+          {
+            "description": "Optional document context",
+            "in": "query",
+            "name": "document_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional document context",
+              "title": "Document Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/UserResponse"
+                  },
+                  "title": "Response List Reviewer Candidates Api V1 Reviews Reviewer Candidates Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "List Reviewer Candidates",
         "tags": [
           "Reviews",
           "Reviews"
@@ -32043,7 +33083,7 @@
     },
     "/api/v1/search/analytics": {
       "get": {
-        "description": "Get search analytics \u2014 top queries, zero-result queries, click-through.",
+        "description": "Get search analytics — top queries, zero-result queries, click-through.",
         "operationId": "get_search_analytics_api_v1_search_analytics_get",
         "parameters": [
           {
@@ -32762,6 +33802,45 @@
       }
     },
     "/api/v1/support/tickets/{ticket_id}": {
+      "delete": {
+        "description": "Delete a closed support ticket. Requires manager-level access.",
+        "operationId": "delete_ticket_api_v1_support_tickets__ticket_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "ticket_id",
+            "required": true,
+            "schema": {
+              "title": "Ticket Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Delete Ticket",
+        "tags": [
+          "Support"
+        ]
+      },
       "get": {
         "description": "Get ticket details with messages and assignments.",
         "operationId": "get_ticket_api_v1_support_tickets__ticket_id__get",
