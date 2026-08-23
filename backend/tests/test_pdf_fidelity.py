@@ -183,7 +183,9 @@ class TestNodeIdentity:
     def test_escapes_markup_in_a_node_id(self):
         result = convert_pdf_to_fidelity_html(_make_structured_pdf())
 
-        assert all('"' not in node_id and "<" not in node_id for node_id in _rendered_node_ids(result.html))
+        assert all(
+            '"' not in node_id and "<" not in node_id for node_id in _rendered_node_ids(result.html)
+        )
 
 
 class TestFidelityTableOfContents:
