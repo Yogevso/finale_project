@@ -8,6 +8,7 @@ import { TableSkeleton } from '@/components/skeletons'
 import { publicApi } from '@/lib/publicApi'
 import { audienceSensitiveQueryOptions } from '@/lib/queryFreshness'
 import { formatDocumentDate } from '@/lib/dateUtils'
+import { documentStatusLabel } from '@/lib/documentStatus'
 
 type DocumentSort = 'latest' | 'name' | 'category' | 'version' | 'status'
 
@@ -39,10 +40,7 @@ export default function PublicPlatformDetailPage() {
 
   const formatDateOrDash = (value?: string) => formatDocumentDate(value)
 
-  const formatStatus = (status: string) =>
-    status
-      .replace(/_/g, ' ')
-      .replace(/\b\w/g, (ch) => ch.toUpperCase())
+  const formatStatus = (status: string) => documentStatusLabel(status)
 
   const hasCustomFilters = searchTerm.trim().length > 0 || sortBy !== 'latest' || sortOrder !== 'desc'
 

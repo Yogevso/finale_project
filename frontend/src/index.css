@@ -249,6 +249,14 @@
     @apply w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500;
   }
 
+  /* A visibility control inside a data row sat 160px wide and 39px tall next to a 53x26
+     status pill, in a form-control language nothing else in the row spoke. It keeps its
+     place - the change it starts is confirmed and reason-captured - but it now reads as
+     one of the row's own tokens. */
+  .select-field--compact {
+    @apply w-auto min-w-0 rounded-full border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-semibold text-slate-700;
+  }
+
   /* AC-012: High contrast mode support */
   @media (forced-colors: active) {
     .surface-card,

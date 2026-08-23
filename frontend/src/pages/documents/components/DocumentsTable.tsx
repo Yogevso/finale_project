@@ -8,6 +8,7 @@ import { getDocumentDisplayDescription, getDocumentDisplayTitle } from '@/lib/do
 import Skeleton from '@/components/Skeleton'
 import type { DocumentListResponse, DocumentStatus, DocumentVisibility } from '@/types'
 import { formatDocumentDate } from '@/lib/dateUtils'
+import { documentStatusDescription, documentStatusLabel, documentStatusTone } from '@/lib/documentStatus'
 
 type VisibilityChangeRequest = {
   id: number
@@ -196,23 +197,10 @@ export function DocumentsTable({
                     </th>
                     <td className="admin-table-cell w-[12%]">
                       <span
-                        className={`pill whitespace-nowrap ${
-                          doc.status === 'active'
-                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                            : doc.status === 'approved'
-                              ? 'bg-blue-50 text-blue-700 border-blue-200'
-                              : doc.status === 'draft'
-                                ? 'bg-amber-50 text-amber-700 border-amber-200'
-                                : doc.status === 'pending_review'
-                                  ? 'bg-purple-50 text-purple-700 border-purple-200'
-                                  : 'bg-slate-100 text-slate-600 border-slate-200'
-                        }`}
+                        className={`pill whitespace-nowrap ${documentStatusTone(doc.status)}`}
+                        title={documentStatusDescription(doc.status)}
                       >
-                        {doc.status === 'active'
-                          ? 'Published'
-                          : doc.status === 'approved'
-                            ? 'Approved'
-                            : doc.status}
+                        {documentStatusLabel(doc.status)}
                       </span>
                     </td>
                     <td className="admin-table-cell">
@@ -232,7 +220,7 @@ export function DocumentsTable({
                                   title: documentTitle,
                                 })
                               }
-                              className="select-field min-w-[9.5rem] w-40"
+                              className="select-field select-field--compact"
                             >
                               <option value="internal">Internal</option>
                               <option value="public">Public</option>
