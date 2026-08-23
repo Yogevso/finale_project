@@ -57,6 +57,16 @@ _REPEAT_CHROME_RATIO = 0.6
 _MIN_PAGES_FOR_REPEAT_DETECTION = 4
 # An image reused on at least this fraction of pages is a logo/watermark.
 _REPEAT_IMAGE_RATIO = 0.5
+# Quality for images re-encoded as JPEG. Across a twenty-page Intel guide the same
+# 42 screenshots weigh 8.97 MB as PNG and 1.60 MB at this setting, against 1.44 MB
+# for the streams the PDF itself stores.
+_JPEG_QUALITY = 85
+# Past this, a document's images are worth saying out loud. The reader artifact and
+# every version of the document carry them base64-encoded, a third larger again, and
+# the largest version stored today is half a megabyte. Chosen to sit above an ordinary
+# illustrated guide - the twenty-page Intel one lands at 1.6 MB - and below the point
+# where one upload is heavier than the whole versions table.
+_IMAGE_BUDGET_BYTES = 6 * 1024 * 1024
 # Images smaller than this (points, roughly 1/72") carry no reader value.
 _MIN_IMAGE_DIMENSION = 32
 # Fraction of a text block that must sit inside a table to be claimed by it.
@@ -186,10 +196,38 @@ def convert_pdf_to_docx(pdf_bytes: bytes) -> PdfConversionResult:
             elif blk.kind == "image":
                 _add_image_block(docx_doc, blk, result.warnings, page_idx)
 
+    _warn_on_image_weight(blocks_by_page, result.warnings)
+
     buf = io.BytesIO()
     docx_doc.save(buf)
     result.docx_bytes = buf.getvalue()
     return result
+
+
+def _warn_on_image_weight(
+    blocks_by_page: list[list[_ExtractedBlock]],
+    warnings: list[str],
+) -> None:
+    """Say how heavy a document's images are before they are anyone's problem.
+
+    Nothing is downscaled here on purpose. These are screenshots of interfaces, and the
+    text inside them is the reason the reader opened the page - a cap that quietly
+    softens them trades the thing the document is for against bytes. Measured on the
+    twenty-page Intel guide, capping the long edge at 1600px saves 24% while the choice
+    of JPEG over PNG already saved 82%, so the cap buys little and costs legibility.
+    """
+    total = sum(
+        len(blk.image_bytes)
+        for page_blocks in blocks_by_page
+        for blk in page_blocks
+        if blk.kind == "image"
+    )
+    if total > _IMAGE_BUDGET_BYTES:
+        warnings.append(
+            f"This document's images weigh {total / 1024 / 1024:.1f} MB, which every "
+            "stored version of it will carry. Consider whether they all belong in the "
+            "document body."
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -540,6 +578,58 @@ def _join_hyphenated(text: str) -> str:
     return re.sub(r"(\w)-\s+(\w)", r"\1\2", text)
 
 
+def _mask_is_meaningful(doc: Any, smask_xref: int) -> bool:
+    """Does this soft mask actually make anything transparent?
+
+    A PDF writer will attach a mask that is opaque end to end - 36 of the 42 images in
+    one Intel guide carry one, and not one of them hides a pixel. Attaching it anyway
+    gives the image an alpha channel, which forces PNG, which is six times the bytes of
+    the JPEG the page was carrying in the first place.
+    """
+    try:
+        mask = fitz.Pixmap(doc, smask_xref)
+        return min(mask.samples) < 255
+    except Exception:  # policy: DEGRADED — an unreadable mask is treated as no mask
+        return False
+
+
+def _encode_image(
+    doc: Any,
+    xref: int,
+    smask_xref: int,
+    page_idx: int,
+    warnings: list[str],
+) -> tuple[bytes | None, str]:
+    """Return image bytes python-docx will accept, with their extension.
+
+    PyMuPDF hands back the stream exactly as the PDF stores it, and python-docx sniffs
+    that stream for a header it knows. On a JPEG lifted out of a PDF it usually does not
+    find one and raises ``UnrecognizedImageError`` - which carries no message, so the
+    warning read "failed to embed image: " and forty of one document's forty-two images
+    left without saying why. Rendering through a pixmap produces a header every time.
+
+    PNG is lossless and six times larger on the screenshots these documents are made of,
+    so only an image that actually carries transparency is written as PNG.
+    """
+    try:
+        pixmap = fitz.Pixmap(doc, xref)
+        if pixmap.n - pixmap.alpha >= 4:  # CMYK, separation, and other deep spaces
+            pixmap = fitz.Pixmap(fitz.csRGB, pixmap)
+        if smask_xref and _mask_is_meaningful(doc, smask_xref):
+            # The transparency lives in a separate object; without it a logo drawn on a
+            # transparent background arrives as a black rectangle.
+            try:
+                pixmap = fitz.Pixmap(pixmap, fitz.Pixmap(doc, smask_xref))
+            except Exception:  # policy: DEGRADED — an unusable mask still leaves the image
+                pass
+        if pixmap.alpha:
+            return pixmap.tobytes("png"), "png"
+        return pixmap.tobytes("jpg", jpg_quality=_JPEG_QUALITY), "jpeg"
+    except Exception as exc:  # policy: LOSSY — one unreadable image must not cost the page
+        warnings.append(f"Page {page_idx + 1}: could not re-encode image: {exc!r}")
+        return None, ""
+
+
 def _extract_images(
     page: Any,
     page_idx: int,
@@ -575,11 +665,16 @@ def _extract_images(
                     order = (rects[0].y0, rects[0].x0)
             except Exception:  # policy: DEGRADED — position is a nicety, not a requirement
                 pass
+            payload, extension = _encode_image(
+                doc, xref, img_info[1] if len(img_info) > 1 else 0, page_idx, warnings
+            )
+            if payload is None:
+                continue
             blocks.append(
                 _ExtractedBlock(
                     kind="image",
-                    image_bytes=base_image["image"],
-                    image_ext=base_image.get("ext", "png"),
+                    image_bytes=payload,
+                    image_ext=extension,
                     order=order,
                 )
             )
@@ -682,7 +777,9 @@ def _add_image_block(
     except (
         Exception
     ) as exc:  # policy: LOSSY — image embedding failure should not abort page conversion
-        warnings.append(f"Page {page_idx + 1}: failed to embed image: {exc}")
+        # `UnrecognizedImageError` stringifies to nothing, which is how this failure
+        # stayed invisible; `!r` always names the class at least.
+        warnings.append(f"Page {page_idx + 1}: failed to embed image: {exc!r}")
 
 
 # ---------------------------------------------------------------------------
