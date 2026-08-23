@@ -262,7 +262,7 @@ export function DocumentsTable({
                               type="button"
                               onClick={() => onRestoreDeleted(doc.id, documentTitle, doc.etag)}
                               aria-label={`Restore ${documentTitle}`}
-                              className="text-xs font-semibold uppercase tracking-wide text-emerald-600 hover:text-emerald-700"
+                              className="text-xs font-semibold uppercase tracking-wide text-emerald-700 hover:text-emerald-800 dark:text-emerald-300 dark:hover:text-emerald-200"
                             >
                               Restore
                             </button>
@@ -270,7 +270,7 @@ export function DocumentsTable({
                               type="button"
                               onClick={() => onPurgeDeleted(doc.id, documentTitle, doc.etag)}
                               aria-label={`Permanently delete ${documentTitle}`}
-                              className="text-xs font-semibold uppercase tracking-wide text-rose-600 hover:text-rose-700"
+                              className="text-xs font-semibold uppercase tracking-wide text-rose-700 hover:text-rose-800 dark:text-rose-300 dark:hover:text-rose-200"
                             >
                               Purge
                             </button>
@@ -283,14 +283,14 @@ export function DocumentsTable({
                           <Link
                             to={`/documents/${doc.id}`}
                             aria-label={`Edit ${documentTitle}`}
-                            className="text-xs font-semibold uppercase tracking-wide text-blue-600 hover:text-blue-700"
+                            className="text-xs font-semibold uppercase tracking-wide text-blue-700 hover:text-blue-800 dark:text-blue-300 dark:hover:text-blue-200"
                           >
                             Edit
                           </Link>
                           <Link
                             to={`/documents/${doc.id}/fullscreen`}
                             aria-label={`View transcript of ${documentTitle}`}
-                            className="text-xs font-semibold uppercase tracking-wide text-slate-600 hover:text-slate-700"
+                            className="text-xs font-semibold uppercase tracking-wide text-slate-600 hover:text-slate-800 dark:text-slate-300 dark:hover:text-slate-100"
                           >
                             Transcript
                           </Link>
@@ -300,8 +300,8 @@ export function DocumentsTable({
                             aria-label={`${doc.status === 'archived' ? 'Restore' : 'Archive'} ${documentTitle}`}
                             className={`text-xs font-semibold uppercase tracking-wide ${
                               doc.status === 'archived'
-                                ? 'text-emerald-600 hover:text-emerald-700'
-                                : 'text-amber-600 hover:text-amber-700'
+                                ? 'text-emerald-700 hover:text-emerald-800 dark:text-emerald-300'
+                                : 'text-amber-700 hover:text-amber-800 dark:text-amber-300'
                             }`}
                           >
                             {doc.status === 'archived' ? 'Restore' : 'Archive'}
@@ -310,7 +310,7 @@ export function DocumentsTable({
                             type="button"
                             onClick={() => onDelete(doc.id, documentTitle, doc.etag)}
                             aria-label={`Delete ${documentTitle}`}
-                            className="text-xs font-semibold uppercase tracking-wide text-rose-600 hover:text-rose-700"
+                            className="text-xs font-semibold uppercase tracking-wide text-rose-700 hover:text-rose-800 dark:text-rose-300 dark:hover:text-rose-200"
                           >
                             Delete
                           </button>
@@ -330,7 +330,7 @@ export function DocumentsTable({
       {data && data.total_pages > 1 ? (
         <div className="flex items-center justify-between border-t border-slate-200 px-5 py-4">
           <div className="text-base text-slate-600 font-medium">
-            Page {data.page} of {data.total_pages} <span className="text-sm font-normal text-slate-400">({data.total} total)</span>
+            Page {data.page} of {data.total_pages} <span className="text-sm font-normal text-slate-500 dark:text-slate-400">({data.total} total)</span>
           </div>
           <div className="flex gap-2">
             <button
