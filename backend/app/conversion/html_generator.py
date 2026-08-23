@@ -79,9 +79,33 @@ def _render_list_item(node: IRNode) -> str:
     return f"<li{attrs}>{node.content}{_render_children(node.children)}</li>"
 
 
+def _render_colgroup(styles: dict[str, Any] | None) -> str:
+    """Restate the source document's own column proportions.
+
+    Emitted as a hint rather than a rule: the table stays ``table-layout: auto``, so a
+    column whose content cannot fit the width the author gave it still grows. The
+    proportions decide how the slack is shared, which is the part the browser was
+    otherwise guessing at.
+    """
+    raw = (styles or {}).get("column_widths")
+    if not isinstance(raw, (list, tuple)) or not raw:
+        return ""
+
+    try:
+        fractions = [float(value) for value in raw]
+    except (TypeError, ValueError):  # policy: DEGRADED — an unusable grid renders as none
+        return ""
+    if any(fraction <= 0 for fraction in fractions):
+        return ""
+
+    columns = "".join(f'<col style="width:{fraction * 100:.3f}%" />' for fraction in fractions)
+    return f"<colgroup>{columns}</colgroup>"
+
+
 def _render_table(node: IRNode) -> str:
     wrapper_classes = _style_classes(node.styles, "wrapper_classes") or ["table-wrapper"]
     table_classes = _style_classes(node.styles, "table_classes")
+    colgroup = _render_colgroup(node.styles)
 
     header_rows = [
         ir_to_html(child)
@@ -98,7 +122,7 @@ def _render_table(node: IRNode) -> str:
     wrapper_attr = _render_class_attr(wrapper_classes)
     return (
         f"<div{wrapper_attr}>"
-        f"<table{table_attrs}><thead>{''.join(header_rows)}</thead>"
+        f"<table{table_attrs}>{colgroup}<thead>{''.join(header_rows)}</thead>"
         f"<tbody>{''.join(body_rows)}</tbody></table>"
         "</div>"
     )

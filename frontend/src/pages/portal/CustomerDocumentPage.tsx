@@ -55,6 +55,7 @@ import {
 import { getReadingWidth, setReadingWidth, type ReadingWidth } from '@/lib/readingWidth';
 import NotFoundState from '@/components/NotFoundState';
 import { FullscreenTopBar } from '@/pages/document-detail/components/FullscreenTopBar';
+import { formatDocumentDate } from '@/lib/dateUtils'
 
 const EMPTY_SELECTION_POPUP: SelectionPopupState = { show: false, x: 0, y: 0, text: '', anchorId: '' };
 const EMPTY_COMMENT_POPUP: CommentPopupState = {
@@ -72,11 +73,7 @@ function formatFileSize(bytes: number): string {
 }
 
 function formatDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-  });
+  return formatDocumentDate(dateStr);
 }
 
 function escapeSelector(value: string): string {

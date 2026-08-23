@@ -35,7 +35,9 @@ import {
 import { ContentEditChooserPopup } from '@/pages/document-detail/components/ContentEditChooserPopup';
 import { DocumentCommentsSidebar } from '@/pages/document-detail/components/DocumentCommentsSidebar';
 import { DocumentFeedbackSidebar } from '@/pages/document-detail/components/DocumentFeedbackSidebar';
+import { getPreferredPreviewAttachment } from '@/lib/attachmentSelection';
 import {
+  getFidelityAttachment,
   supportsFidelityView,
   useFidelityView,
 } from '@/pages/document-detail/hooks/useFidelityView';
@@ -53,6 +55,7 @@ import { usePreviewShortcuts } from '@/pages/document-detail/hooks/usePreviewSho
 import { usePreviewSource } from '@/pages/document-detail/hooks/usePreviewSource';
 import { useReaderView } from '@/pages/document-detail/hooks/useReaderView';
 import {
+  DOCUMENT_FONT_SCALE_VALUES,
   DOCUMENT_FONT_SIZE_VALUES,
   getDocumentFontSize,
   getDocumentTheme,
@@ -419,7 +422,7 @@ export function DocumentPreview({
   // "Original layout" is a read-only rendering mode on top of the reader source, not a
   // source of its own, so previewSource and every flow keyed off it are left untouched.
   const [showFidelityView, setShowFidelityView] = useState(false);
-  const fidelityAttachment = selectedAttachment || previewableAttachments[0] || null;
+  const fidelityAttachment = useMemo(() => getFidelityAttachment(attachments), [attachments]);
   const fidelityAvailable = supportsFidelityView(fidelityAttachment);
   const showingFidelity = showFidelityView && fidelityAvailable && previewSource === 'reader';
 
@@ -430,11 +433,15 @@ export function DocumentPreview({
   });
 
   const handleSelectFidelityView = useCallback(() => {
-    if (fidelityAttachment) {
-      setSelectedAttachment(fidelityAttachment);
+    // The original layout renders on top of the reader source, so this makes sure there
+    // is one. It must not select the PDF itself: a PDF is not a previewable attachment,
+    // so usePreviewSource clears the selection again on the next render, previewSource
+    // falls back to the inline content and the view can never open.
+    if (!selectedAttachment) {
+      setSelectedAttachment(getPreferredPreviewAttachment(previewableAttachments));
     }
     setShowFidelityView(true);
-  }, [fidelityAttachment]);
+  }, [previewableAttachments, selectedAttachment]);
 
   const handleSelectPreviewAttachment = useCallback((attachment: Attachment | null) => {
     setShowFidelityView(false);
@@ -476,6 +483,7 @@ export function DocumentPreview({
     () =>
       ({
         '--doc-font-size': DOCUMENT_FONT_SIZE_VALUES[fontSize],
+        '--doc-font-scale': DOCUMENT_FONT_SCALE_VALUES[fontSize],
       }) as CSSProperties,
     [fontSize]
   );

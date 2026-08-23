@@ -249,6 +249,14 @@
     @apply w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500;
   }
 
+  /* A visibility control inside a data row sat 160px wide and 39px tall next to a 53x26
+     status pill, in a form-control language nothing else in the row spoke. It keeps its
+     place - the change it starts is confirmed and reason-captured - but it now reads as
+     one of the row's own tokens. */
+  .select-field--compact {
+    @apply w-auto min-w-0 rounded-full border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-semibold text-slate-700;
+  }
+
   /* AC-012: High contrast mode support */
   @media (forced-colors: active) {
     .surface-card,
@@ -340,7 +348,14 @@
 
   .admin-table-cell {
     @apply px-5 py-3.5 align-top;
-    overflow-wrap: anywhere;
+    /* A row-header cell is a <th>, and the browser centres those by default, so the
+       document's identity block sat centred while every other column was left-aligned. */
+    text-align: left;
+    /* `anywhere` also drops the cell's min-content width to one character, so a squeezed
+       table shaves the title column instead of letting the shell scroll: at 700px the
+       title column fell to 115px and "709759-005 (2)" broke two characters per line,
+       871px tall. `break-word` still breaks a token that cannot fit. */
+    overflow-wrap: break-word;
     transition: background-color 180ms ease;
   }
 
@@ -620,7 +635,11 @@
   }
 
   .dropdown-menu {
-    @apply rounded-2xl border border-slate-200 bg-white p-1 shadow-lg animate-scale-in;
+    /* The nav links in the header are positioned, so without a stacking order of its own
+       a dropdown is painted underneath whichever of them comes later in the DOM. Every
+       call site that remembered to set one still overrides this: utilities outrank
+       components. */
+    @apply relative z-50 rounded-2xl border border-slate-200 bg-white p-1 shadow-lg animate-scale-in;
   }
 
   .dropdown-item {
@@ -1519,13 +1538,18 @@ h6 {
 
 /* Document Preview Styles (for mammoth-converted Word docs) */
 .document-preview-pane {
+  /* Named because the sticky table header has to cancel exactly this much: a scroll
+     container's padding band is above its content box, so `top: 0` would leave rows
+     sliding through the gap over the header. */
+  --doc-pane-pad: clamp(1rem, 2vw, 2rem);
   background: linear-gradient(180deg, #eef2f7 0%, #e8edf3 100%);
-  padding: clamp(1rem, 2vw, 2rem);
+  padding: var(--doc-pane-pad);
 }
 
 .document-preview-shell--revamp .document-preview-pane {
+  --doc-pane-pad: clamp(0.85rem, 1.5vw, 1.35rem);
   background: linear-gradient(180deg, #f3f6fb 0%, #ecf1f8 100%);
-  padding: clamp(0.85rem, 1.5vw, 1.35rem);
+  padding: var(--doc-pane-pad);
 }
 
 .document-preview-paper {
@@ -1678,7 +1702,10 @@ h6 {
   max-width: 78ch;
   margin: 0 auto;
   line-height: 1.82;
-  font-size: clamp(0.98rem, 0.965rem + 0.08vw, 1.06rem);
+  /* This used to replace `var(--doc-font-size)` outright, so A- / A / A+ moved the
+     variable and nothing read it. Multiplying keeps the fluid base and gives the
+     control its effect back. */
+  font-size: calc(clamp(0.98rem, 0.965rem + 0.08vw, 1.06rem) * var(--doc-font-scale, 1));
   padding: clamp(1.45rem, 2.1vw, 2.15rem) clamp(1rem, 2.25vw, 2.35rem)
     clamp(2rem, 2.3vw, 2.6rem);
 }
@@ -1789,16 +1816,25 @@ h6 {
   border-collapse: collapse;
   margin: 1.2rem 0;
   table-layout: auto;
-  font-size: 0.82rem;
+  /* `em`, not `rem`: a release note is mostly table, so the size control has to move
+     the tables too. */
+  font-size: 0.9em;
   background: var(--doc-table-bg);
+}
+
+/* A table nested in a cell must not compound the reduction. */
+.document-preview-content table table {
+  font-size: 1em;
 }
 
 .document-preview-content .document-table-scroll,
 .document-preview-content .table-wrapper {
   margin: 1.25rem 0;
-  overflow-x: auto;
-  overflow-y: hidden;
-  overscroll-behavior-x: contain;
+  /* Any non-visible overflow here would make this element the sticky containing block,
+     and it is exactly as tall as its table, so a sticky header would never move. The
+     preview pane scrolls on both axes, so a table too wide to fit is still reachable -
+     the whole pane scrolls sideways rather than the table alone. */
+  overflow: visible;
   -webkit-overflow-scrolling: touch;
   border: 1px solid var(--doc-table-border);
   border-radius: 0.95rem;
@@ -1853,7 +1889,7 @@ h6 {
 .document-preview-content--reader,
 .document-preview-content--reader p,
 .document-preview-content--reader li {
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
   word-break: normal;
 }
 
@@ -1889,10 +1925,30 @@ h6 {
   margin: 0;
 }
 
+/* One "Issues Fixed" cell carries Title, Description, Severity, Component and Root Cause
+   as nine paragraphs and 1,400 characters. At zero margin they read as a single block,
+   which is where the structure the author wrote goes missing. */
+.document-preview-content th > p + p,
+.document-preview-content td > p + p {
+  margin-top: 0.5em;
+}
+
 .document-preview-content th {
   background: var(--doc-table-head-bg);
   font-weight: 600;
   color: var(--doc-content-color);
+}
+
+.document-preview-content thead th {
+  position: sticky;
+  /* Cancels the pane's padding band; see --doc-pane-pad. */
+  top: calc(-1 * var(--doc-pane-pad, 0px));
+  z-index: 2;
+  /* Opaque, or rows show through as they pass underneath. */
+  background: var(--doc-table-head-bg);
+  box-shadow:
+    0 1px 0 var(--doc-table-border),
+    0 6px 10px -8px rgba(15, 23, 42, 0.45);
 }
 
 .document-preview-content tbody tr:nth-child(even) td {
@@ -1902,8 +1958,15 @@ h6 {
 .document-preview-content .extracted-table th,
 .document-preview-content .extracted-table td {
   min-width: 0;
-  overflow-wrap: anywhere;
-  word-break: break-word;
+  /* `anywhere` also drops a cell's min-content width to a single character. Auto table
+     layout then gives the whole width to the column holding the most text and shaves the
+     others below their own words: on the release notes "Fixed in Version" wrapped to
+     "Fixe/d in/Vers/ion" and the id 130145 broke across two lines. `break-word` still
+     breaks a token that genuinely cannot fit, but leaves the intrinsic width alone -
+     measured on that table, the id column goes from 53px to 107px and the version column
+     from 71px to 117px, with the table itself no wider than before. */
+  overflow-wrap: break-word;
+  word-break: normal;
 }
 
 .document-preview-content .extracted-list {
@@ -2391,6 +2454,13 @@ h6 {
   .document-preview-pane {
     padding: 0 !important;
     background: #ffffff !important;
+  }
+
+  /* Sticky belongs to a scrolling pane. On paper there is no scrollport, and the browser
+     already repeats <thead> on every page by itself - a sticky header only fights that. */
+  .document-preview-content thead th {
+    position: static !important;
+    box-shadow: none !important;
   }
 
   .document-preview-paper {

@@ -14,6 +14,7 @@ import { portalApi } from '../../lib/portalApi'
 import { audienceSensitiveQueryOptions } from '@/lib/queryFreshness'
 import PageHeader from '@/components/PageHeader'
 import { StatCardSkeleton } from '@/components/skeletons'
+import { formatDocumentDate } from '@/lib/dateUtils'
 import {
   FileText,
   MessageSquare,
@@ -261,7 +262,7 @@ export default function CustomerDashboard() {
                       )}
                       {item.last_read_at && (
                         <p className="helper-copy mt-1">
-                          {new Date(item.last_read_at).toLocaleDateString()}
+                          {formatDocumentDate(item.last_read_at)}
                         </p>
                       )}
                     </div>

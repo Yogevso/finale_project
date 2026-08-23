@@ -6,6 +6,7 @@ import { parseDocumentHtml } from '@/lib/documentRenderer'
 import { getReadingWidth, setReadingWidth, type ReadingWidth } from '@/lib/readingWidth'
 import { audienceSensitiveQueryOptions, fetchFresh } from '@/lib/queryFreshness'
 import { useTheme } from '@/hooks/useTheme'
+import { formatDocumentDate } from '@/lib/dateUtils'
 import type {
   Attachment,
   Document,
@@ -212,7 +213,7 @@ export default function ViewerDocumentPage() {
             </h1>
             {document.description && <p className="text-slate-600">{document.description}</p>}
             <div className="mt-4 flex gap-6 text-sm text-slate-500">
-              <span>Published: {new Date(document.updated_at).toLocaleDateString()}</span>
+              <span>Published: {formatDocumentDate(document.updated_at)}</span>
               {selectedVersion && <span>Version: {versionLabel(selectedVersion)}</span>}
             </div>
           </div>
@@ -348,11 +349,7 @@ export default function ViewerDocumentPage() {
           <div className="helper-copy flex flex-wrap gap-6 border-t border-slate-200 pt-4 dark:border-slate-800">
             <div>
               <span className="font-medium text-slate-700 dark:text-slate-200">Published:</span>{' '}
-              {new Date(document.updated_at).toLocaleDateString('en-US', {
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric',
-              })}
+              {formatDocumentDate(document.updated_at)}
             </div>
             {selectedVersion && (
               <div>
@@ -484,7 +481,7 @@ export default function ViewerDocumentPage() {
                       )}
                     </div>
                     <span className="body-copy">
-                      {new Date(version.created_at).toLocaleDateString()}
+                      {formatDocumentDate(version.created_at)}
                     </span>
                   </div>
                   {version.changes_summary && (

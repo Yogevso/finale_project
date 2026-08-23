@@ -363,7 +363,7 @@ export function DocumentsFiltersToolbar({
                   role="menu"
                   tabIndex={-1}
                   aria-label="Status filter options"
-                  className="absolute right-0 z-10 mt-2 w-44 rounded-xl border border-slate-200 bg-white p-2 shadow-lg"
+                  className="absolute right-0 z-10 mt-2 w-44 rounded-xl border border-slate-200 bg-white p-2 shadow-lg dark:border-slate-700 dark:bg-slate-900"
                   onKeyDown={(event) => handleFilterMenuKeyDown(event, statusDetailsRef)}
                 >
                   {[
@@ -406,7 +406,7 @@ export function DocumentsFiltersToolbar({
                   role="menu"
                   tabIndex={-1}
                   aria-label="Visibility filter options"
-                  className="absolute right-0 z-10 mt-2 w-40 rounded-xl border border-slate-200 bg-white p-2 shadow-lg"
+                  className="absolute right-0 z-10 mt-2 w-40 rounded-xl border border-slate-200 bg-white p-2 shadow-lg dark:border-slate-700 dark:bg-slate-900"
                   onKeyDown={(event) => handleFilterMenuKeyDown(event, visibilityDetailsRef)}
                 >
                   {[

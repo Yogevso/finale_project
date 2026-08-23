@@ -249,7 +249,7 @@ export default function NotificationBell() {
       {isOpen && (
         <div
           id={panelId}
-          className="dropdown-menu motion-enter-slide absolute right-0 mt-2 w-96 overflow-hidden p-0 dark:bg-slate-900"
+          className="dropdown-menu motion-enter-slide absolute right-0 z-50 mt-2 w-96 overflow-hidden p-0 dark:bg-slate-900"
           role="dialog"
           aria-label="Notifications panel"
         >

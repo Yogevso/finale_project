@@ -60,6 +60,14 @@ contain their own numbers - Word renders those from the numbering definition, so
 `paragraph.text` gives "Release Kit Summary" and never "1 Release Kit Summary". The
 numbering exists literally only in the contents entries.
 
+That extends to its tables. `w:tblGrid` states the column widths in twentieths of a
+point, and the extractor now carries them through as a `<colgroup>` of proportions.
+Without it, CSS auto layout infers widths from content and its guess swings wildly from
+table to table - on one release-notes table it gave the version column 45% and the
+description column 36%, the reverse of what the author set. The table stays
+`table-layout: auto`, so the grid decides how slack is shared without ever clipping a
+column whose content will not fit.
+
 **PDF declares almost nothing.** The GCC user guide ships four level-one bookmarks for
 twenty pages. The outline is authoritative where it exists and detected headings fill
 in below it, using the whole font signature rather than size or weight alone.
@@ -67,8 +75,39 @@ in below it, using the whole font signature rather than size or weight alone.
 **Layout dies early on the PDF path.** `convert_pdf_to_docx` reads span coordinates,
 sorts blocks by them and discards them; DOCX is a flow format, so page boundaries and
 positions cannot be recovered downstream. `pdf_layout.py` is the parallel path that
-keeps them. It and `docx_structure.py` are **written, tested and wired to nothing** -
-no screen consumes them yet.
+keeps them.
+
+`pdf_layout.py` and `docx_structure.py` now feed the contents (`version_toc`) and, on
+the PDF side, the fidelity render. `pdf_fidelity` extracts through
+`extract_layout_from_document` on the document it already has open rather than making
+a second pass, and stamps every rendered line with the `data-node-id` of the node it
+came from, plus `data-node-type` and `data-node-level`. A contents entry's `anchor_id`
+and the heading on the page are therefore the same id.
+
+**The fidelity iframe is `sandbox=""`, so the parent cannot reach those ids yet.** A
+sandbox without `allow-same-origin` gives the frame an opaque origin and
+`contentDocument` is null, so contents-click navigation inside the fidelity view needs
+either a narrower sandbox or a `postMessage` channel. That is the next step, not a
+detail of this one.
+
+**Nothing had ever rendered this view, and it held three independent faults.** Each
+one alone was enough to keep it dark, so none of them could be observed until the one
+in front of it was fixed - worth remembering before trusting any other path here that
+no screen exercises:
+
+1. The artifact reported `completed` where the whole platform says `ready`.
+2. `PREVIEWABLE_ATTACHMENT_MIME_TYPES` holds DOCX and PPTX only, by design - a PDF has
+   no reader artifact - but the fidelity attachment was read out of that same filtered
+   list, so `supportsFidelityView` was a PDF test applied to a list PDFs are removed
+   from. It now comes from the document's full attachment list. For the same reason the
+   toggle must not select the PDF: `usePreviewSource` clears any selection that is not
+   previewable, which sent `previewSource` back to the inline content on the next
+   render and unlatched the toggle.
+3. The render is an absolutely positioned overlay, so in fidelity mode the scroll region
+   had nothing left in flow and collapsed to the height of the reading-progress bar.
+
+A document whose only attachment is a PDF still cannot open this view: it rides on top
+of a reader source, and that document has none.
 
 **The frontend sanitizer drops what a faithful render is made of.**
 `sanitizeHtmlForPreview` removes `<style>`, the `style` attribute and `svg`. The
@@ -82,7 +121,8 @@ Stored in `versions.toc_json` beside the content it describes, served as
 and a stable `anchor_id` matching a heading id, so navigation is a direct lookup.
 
 It is built at upload from the source file and rebuilt from the HTML on every edit,
-carrying pages across on the anchor id. Anything that writes `versions.content` must
+carrying pages across on the anchor id. `ready` is the status vocabulary everywhere -
+an artifact that reports anything else is treated as a failure by the reader. Anything that writes `versions.content` must
 write the contents too, or a review will compare a baseline holding entries against a
 candidate holding none and report them all as removed.
 

@@ -161,3 +161,26 @@ describe('Fidelity rendering', () => {
     expect(screen.queryByTestId('document-fidelity-frame')).toBeNull()
   })
 })
+
+describe('PreviewCanvas fidelity layout', () => {
+  it('gives the pane a height of its own while the fidelity render is showing', () => {
+    // The render is an absolutely positioned overlay, so it contributes nothing to the
+    // flow. Without a height here the region collapsed to the reading-progress bar and
+    // the iframe was drawn 27px tall.
+    const html = '<div class="pdf-fidelity"></div>'
+    renderCanvas({ showingFidelity: true, fidelityHtml: html })
+
+    const region = screen
+      .getByTestId('document-fidelity-frame')
+      .closest('.document-preview-scroll-region')
+    expect(region?.className).toContain('min-h-')
+  })
+
+  it('leaves the scrolling pane alone in every other mode', () => {
+    renderCanvas({ showingFidelity: false })
+
+    const region = document.querySelector('.document-preview-scroll-region')
+    expect(region?.className).toContain('overflow-y-auto')
+    expect(region?.className).not.toContain('min-h-')
+  })
+})

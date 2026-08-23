@@ -21,6 +21,21 @@ interface TocPanelProps {
   isRevamp?: boolean
 }
 
+/**
+ * The number a heading carries in the document itself, e.g. "2.1 Supported OS".
+ *
+ * Intel's templates number their own headings, and the extractor keeps that number in
+ * the heading text. Printing a positional number beside it showed each entry twice and
+ * the two disagreed - the rail counted "1.2 1.1 Release Kit Details", because an
+ * unnumbered section ahead of it had taken slot 1.1.
+ */
+const DECLARED_NUMBER = /^(\d+(?:\.\d+)*)[.)]?\s+(\S.*)$/
+
+function splitDeclaredNumber(text: string): { number: string; title: string } | null {
+  const match = DECLARED_NUMBER.exec(text.trim())
+  return match ? { number: match[1], title: match[2].trim() } : null
+}
+
 /** Compute hierarchical numbering like 1, 1.1, 1.2, 2, 2.1, 2.1.1 */
 function computeSectionNumbers(sections: TocSection[]): string[] {
   const counters: number[] = []
@@ -76,6 +91,14 @@ export function TocPanel({
       return next
     })
   }, [])
+
+  // Where the document numbers itself, its numbering is the one people cite, so the
+  // positional count steps aside entirely - including for the odd heading that carries
+  // no number, which shows none rather than one that contradicts its neighbours.
+  const declaresOwnNumbers = useMemo(
+    () => sections.some((section) => splitDeclaredNumber(section.text) !== null),
+    [sections]
+  )
 
   // Determine which sections are hidden because their parent is collapsed
   const visibleSections = useMemo(() => {
@@ -284,6 +307,9 @@ export function TocPanel({
               <ul className="space-y-0.5">
                 {visibleSections.map(({ section: item, number: sectionNumber, visible }) => {
                   if (!visible) return null
+                  const declared = declaresOwnNumbers ? splitDeclaredNumber(item.text) : null
+                  const shownNumber = declaresOwnNumbers ? (declared?.number ?? '') : sectionNumber
+                  const shownText = declared?.title ?? item.text
                   const anchorId = item.anchorId || `heading-${item.index}`
                   const pageStart = resolveSectionPageStart(item)
                   const isActiveItem =
@@ -333,10 +359,10 @@ export function TocPanel({
                         >
                           <span className="flex items-start gap-1.5">
                             <span className="flex-shrink-0 font-mono text-[11px] text-slate-400 mt-[2px]">
-                              {sectionNumber}
+                              {shownNumber}
                             </span>
                             <span className="min-w-0 flex-1 whitespace-normal break-words">
-                              {item.text}
+                              {shownText}
                             </span>
                           </span>
                         </button>

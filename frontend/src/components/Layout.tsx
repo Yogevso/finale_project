@@ -117,8 +117,8 @@ export default function Layout() {
                 DP
               </div>
               <div>
-                <div className="text-xs uppercase tracking-widest text-slate-500">Internal Portal</div>
-                <div className="text-lg font-semibold text-slate-900 leading-tight font-display">Developer Portal</div>
+                <div className="text-xs uppercase tracking-widest text-slate-500 dark:text-slate-400">Internal Portal</div>
+                <div className="text-lg font-semibold text-slate-900 dark:text-slate-100 leading-tight font-display">Developer Portal</div>
               </div>
             </NavLink>
 

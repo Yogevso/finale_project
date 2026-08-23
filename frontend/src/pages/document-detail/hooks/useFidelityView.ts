@@ -17,6 +17,20 @@ export function supportsFidelityView(attachment: Attachment | null): boolean {
   return mimeType === 'application/pdf' || filename.endsWith('.pdf')
 }
 
+/**
+ * The attachment the original-layout view renders.
+ *
+ * Deliberately not taken from `previewableAttachments`. That list drives the reader
+ * *source* and holds only the formats with a reader artifact - DOCX and PPTX - so a PDF
+ * is never in it, and reading the fidelity attachment from it made `supportsFidelityView`
+ * a test that could not pass. The fidelity view is a rendering mode rather than a source,
+ * so it picks its PDF out of the document's full attachment list and leaves the reader
+ * source alone.
+ */
+export function getFidelityAttachment(attachments: Attachment[]): Attachment | null {
+  return attachments.find(supportsFidelityView) ?? null
+}
+
 interface UseFidelityViewParams {
   documentId: number
   attachment: Attachment | null
